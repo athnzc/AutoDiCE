@@ -1,1 +1,0 @@
-mpic++  -DLOG_LAYERS=0 -O3 -DNDEBUG -rdynamic CMakeFiles/ncnnmerge.dir/ncnnmerge.cpp.o -o ncnnmerge 

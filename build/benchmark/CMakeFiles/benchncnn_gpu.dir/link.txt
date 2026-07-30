@@ -1,1 +1,0 @@
-mpic++  -DLOG_LAYERS=0 -O3 -DNDEBUG -rdynamic CMakeFiles/benchncnn_gpu.dir/benchncnn_gpu.cpp.o -o benchncnn_gpu  -Wl,-rpath,/home/gkorod/AutoDiCE/build/src ../src/libncnn.a -lgomp -Wl,-Bstatic -lpthread -Wl,-Bdynamic ../src/libncnn_cuda_lib.so /usr/lib/x86_64-linux-gnu/libcudart.so 
