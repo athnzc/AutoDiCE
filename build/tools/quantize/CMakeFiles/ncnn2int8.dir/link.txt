@@ -1,0 +1,1 @@
+mpic++  -DLOG_LAYERS=0 -O3 -DNDEBUG -rdynamic CMakeFiles/ncnn2int8.dir/ncnn2int8.cpp.o -o ncnn2int8  -Wl,-rpath,/home/gkorod/AutoDiCE/build/src ../../src/libncnn.a -lgomp -Wl,-Bstatic -lpthread -Wl,-Bdynamic ../../src/libncnn_cuda_lib.so /usr/lib/x86_64-linux-gnu/libcudart.so 

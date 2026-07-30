@@ -31,24 +31,15 @@ install_mpich4(){
 }
 install_sen(){
     echo "installing AutoDiCE library for CNN inference."
-    #cd ~/AutoDiCE/
-    echo $(pwd)
-    sudo apt install -y build-essential git libomp-dev libprotobuf-dev protobuf-compiler libvulkan-dev vulkan-utils ninja-build
+    echo "-----------------------------------------"
+    cd ~ && git clone https://github.com/parrotsky/AutoDiCE.git
+    cd ~/AutoDiCE/
+    sudo apt install -y build-essential git libomp-dev libprotobuf-dev protobuf-compiler libvulkan-dev vulkan-utils
     mkdir -p build && cd build
-    cmake -DNCNN_VULKAN=OFF -DNCNN_CUDA=OFF -DNCNN_MPI=ON \
-    -DCMAKE_CUDA_COMPILER=/usr/local/cuda-11.6/bin/nvcc \
-    -DNCNN_OPENMP=ON -DNCNN_BUILD_TESTS=OFF -DNCNN_BUILD_EXAMPLES=OFF -DNCNN_BENCHMARK=OFF .. #-DCMAKE_TOOLCHAIN_FILE=../toolchains/host.gcc.toolchain.cmake .. #../toolchains/tx2.toolchain.cmake ..
+    cmake -DNCNN_VULKAN=ON -DNCNN_CUDA=OFF -DNCNN_MPI=ON -DNCNN_OPENMP=ON -DNCNN_BUILD_TESTS=OFF -DNCNN_BUILD_EXAMPLES=ON -DNCNN_BENCHMARK=OFF -DCMAKE_TOOLCHAIN_FILE=../toolchains/tx2.toolchain.cmake ..
     make -j6 
 }
-#-DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda-11.6 -DCUDA_INCLUDE_DIRS=/usr/local/cuda-11.6/include -DCUDA_CUDART_LIBRARY=/usr/local/cuda-11.6/lib64/libcudart.so
-# -DMPI_C_COMPILER=/usr/local/bin/mpicc -DMPI_CXX_COMPILER=/usr/local/bin/mpicxx -DCUDAToolkit_INCLUDE_DIR=/usr/local/cuda-11.6/include \
-#     -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda-11.6 -DCUDAToolkit_ROOT=/usr/local/cuda-11.6 \
-#     -DCUDA_CUDART_LIBRARY=/usr/local/cuda-11.6/lib64/libcudart.so -DCUDA_CUDART=/usr/local/cuda-11.6/lib64/libcudart.so \
-#     -DCUDA_INCLUDE_DIRS=/usr/local/cuda-11.6/include \
-#     -DCMAKE_CUDA_COMPILER=/usr/local/cuda-11.6/bin/nvcc 
 install_cmake
 install_ucx
-source ~/.bashrc
-echo "using $(which gfortran)"
 install_mpich4
 install_sen

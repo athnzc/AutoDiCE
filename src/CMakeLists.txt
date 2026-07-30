@@ -287,7 +287,8 @@ if(NCNN_CUDA)
             PRIVATE
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/layer/cuda>
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/layer>
-            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+            ${MPI_CXX_INCLUDE_DIRS})
  
     target_link_libraries(ncnn PUBLIC "${CUDA_LIBRARIES}")
     target_link_libraries(ncnn PRIVATE "ncnn_cuda_lib")

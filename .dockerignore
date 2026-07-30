@@ -1,0 +1,21 @@
+build/
+**/__pycache__/
+**/*.pyc
+build-android*/
+build-ios*/
+build-mac/
+build-host*/
+build-arm*/
+build-aarch64*/
+build-hisiv*/
+build-himix*/
+build-v831*/
+.git/
+*.md
+docs/
+
+# Models are never baked into the image — mount them at run time instead.
+# Keeps the build context small and lets one image serve any model.
+tools/distributed/vertical/models/
+tools/distributed/vertical/out/
+tools/distributed/vertical/format_*.onnx

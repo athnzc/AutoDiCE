@@ -10,7 +10,13 @@ from onnx import helper, checker
 from onnx import TensorProto
 import multiprocessing as mp
 from multiprocessing import Process, Pool
-import os, psutil
+import os, psutil, socket
+
+# Inputs and generated files live in separate directories so the input mount can be
+# read-only and nothing the pipeline writes can ever be mistaken for a model to split.
+IN_DIR = os.environ.get('AUTODICE_IN', './models')
+OUT_DIR = os.environ.get('AUTODICE_OUT', './out')
+
 
 class ComputingNode:
     def __init__(self, **node_details):
@@ -99,7 +105,7 @@ class Interface:
         #splitjobs = []
         #poolcurrent = 0
         #for i in range(len(self.nodes)):
-        #    splitjobs.append(Process(target=onnx_extract, args=(self.model, './models/'+self.nodes[i]+'.onnx', self.mappings[self.nodes[i]])))
+        #    splitjobs.append(Process(target=onnx_extract, args=(self.model, OUT_DIR+'/'+self.nodes[i]+'.onnx', self.mappings[self.nodes[i]])))
         #    splitjobs[i].start()
         #    poolcurrent = poolcurrent + 1
         #    if poolcurrent>=poollimit or i == len(self.nodes)-1:
@@ -108,7 +114,7 @@ class Interface:
         #            splitjobs[j].join()
         #        poolcurrent = 0
         for i in range(len(self.nodes)):
-            onnx_extract(self.model, './models/'+self.nodes[i]+'.onnx', self.mappings[self.nodes[i]])
+            onnx_extract(self.model, OUT_DIR+'/'+self.nodes[i]+'.onnx', self.mappings[self.nodes[i]])
         print ("Generate ", (i+1), " Sub-Models.")
 
 
@@ -116,7 +122,7 @@ class Interface:
         #Mar.06 2022 ""DUMMY cause error in communication
         #
         for i in range(len(self.nodes)):
-            input_buffers =  getInputlayers('./models/'+self.nodes[i]+'.onnx')
+            input_buffers =  getInputlayers(OUT_DIR+'/'+self.nodes[i]+'.onnx')
             self.computingnodes[self.nodes[i]].inbuffs = input_buffers
 
             for j in range(len(self.nodes)):
@@ -128,7 +134,7 @@ class Interface:
                             self.computingnodes[self.nodes[i]].receiver.setdefault(input_buff,[]).append(j)
 
         receiver_dict_list = {}
-        with open("./models/receiver.json", 'w') as rf:
+        with open(OUT_DIR+"/receiver.json", 'w') as rf:
             for i in range(len(self.nodes)):
                 receiver_dict_list[self.nodes[i]] = self.computingnodes[self.nodes[i]].receiver
             receiver_dict_content = json.dumps(receiver_dict_list)
@@ -151,7 +157,7 @@ class Interface:
                             if input_buff not in self.computingnodes[self.nodes[i]].outbuffs:
                                 self.computingnodes[self.nodes[i]].outbuffs.append(input_buff)
         for i in range(len(self.nodes)):
-            for j in load_onnx('./models/'+self.nodes[i]+'.onnx').output:
+            for j in load_onnx(OUT_DIR+'/'+self.nodes[i]+'.onnx').output:
                 self.computingnodes[self.nodes[i]].outbuffs.append(j.name)
 
         for i in range(len(self.nodes)):
@@ -165,27 +171,38 @@ class Interface:
 
         ### Output buffers for each sub-model
         sender_dict_list = {}
-        with open("./models/sender.json", 'w') as rf:
+        with open(OUT_DIR+"/sender.json", 'w') as rf:
             for i in range(len(self.nodes)):
                 sender_dict_list[self.nodes[i]] = self.computingnodes[self.nodes[i]].sender
             sender_dict_content = json.dumps(sender_dict_list)
             rf.write(sender_dict_content)
 
     def GenerateRankFile(self):
+        # The device part of a mapping key ('lenovo' in 'lenovo_cpu0') is a logical
+        # name; MPI needs a resolvable host. AUTODICE_HOSTS maps one to the other,
+        # e.g. AUTODICE_HOSTS="lenovo=node-a,jetson=node-b". Devices it does not
+        # mention fall back to AUTODICE_HOST, then to the local hostname, so a
+        # single-machine or single-container run needs no configuration.
+        host_map = dict(pair.split('=', 1)
+                        for pair in os.environ.get('AUTODICE_HOSTS', '').split(',')
+                        if '=' in pair)
+        default_host = os.environ.get('AUTODICE_HOST') or socket.gethostname()
+
         # generate essential rankfile.
-        with open("./models/rankfile", 'w') as rf:
+        with open(OUT_DIR+"/rankfile", 'w') as rf:
             devices_list = []
             for i in range(len(self.computingnodes)):
                 device = self.computingnodes[self.nodes[i]].name
-                devices_list.append(device)
+                host = host_map.get(device, default_host)
+                devices_list.append(host)
                 cores = self.computingnodes[self.nodes[i]].cores
-                rf.write('rank '+ str(i) + '=' + device+'    slots=' + cores +'\n')
-            devices_list = set(devices_list)
-            print ("Devices: %d" % len(devices_list))
+                rf.write('rank '+ str(i) + '=' + host+'    slots=' + cores +'\n')
+            print ("Devices: %d" % len(set(devices_list)))
 
-        with open("./models/hostfile", 'w') as hs:
-            for i in range(len(self.platforms)):
-                hs.write(str(self.platforms[i])+'\n')
+        # One line per distinct host, in first-seen order.
+        with open(OUT_DIR+"/hostfile", 'w') as hs:
+            for host in dict.fromkeys(devices_list):
+                hs.write(str(host)+'\n')
 
 
 
@@ -603,7 +620,7 @@ class EngineCode():
     def GenerateEngine(self, cpp, i=0):
         # The i_th sub-model generate engine.
         engine = self.NodesList[i]
-        enginegraph = onnx.load('./models/'+engine+'.onnx').graph
+        enginegraph = onnx.load(OUT_DIR+'/'+engine+'.onnx').graph
         engineinput_map = generate_node_dict(enginegraph.input)
         engineoutput_map = generate_node_dict(enginegraph.output)
         engineinitializer_map = generate_node_dict(enginegraph.initializer)
@@ -1008,23 +1025,63 @@ def MappingGenerator(resourceid, chromosome, modelfile):
     return mapping
 
 
+def select_model(models_dir):
+    """Pick the network to split out of the mounted models/ directory.
+
+    AUTODICE_MODEL wins if set. Otherwise, if the directory holds exactly one
+    network, use it — keeping a single model in there means nothing to configure.
+    Everything this pipeline writes goes to OUT_DIR, so no generated file can ever
+    turn up here and be mistaken for an input.
+    """
+    env_choice = os.environ.get('AUTODICE_MODEL')
+    if env_choice:
+        if not os.path.exists(env_choice):
+            raise SystemExit("Model not found: %s\n%s" % (env_choice, MOUNT_HINT))
+        return env_choice
+
+    if not os.path.isdir(models_dir):
+        raise SystemExit("No model directory %s/\n%s" % (models_dir, MOUNT_HINT))
+    candidates = sorted(f for f in os.listdir(models_dir) if f.endswith('.onnx'))
+
+    if len(candidates) == 1:
+        return os.path.join(models_dir, candidates[0])
+    if not candidates:
+        raise SystemExit("No model found in %s/\n%s" % (models_dir, MOUNT_HINT))
+    raise SystemExit(
+        "Several models found in %s/: %s\n"
+        "Pick one with AUTODICE_MODEL, e.g.\n"
+        "  docker run --rm -e AUTODICE_MODEL=%s/%s ... autodice"
+        % (models_dir, ", ".join(candidates), models_dir, candidates[0]))
+
+
+MOUNT_HINT = (
+    "models/ is not part of the image; mount it, e.g.\n"
+    "  docker run --rm -v $(pwd)/tools/distributed/vertical/models:"
+    "/autodice/tools/distributed/vertical/models autodice")
+
+
 if __name__ == '__main__':
 
-    output_dirs= './models'
+    output_dirs= OUT_DIR
     if not os.path.exists(output_dirs):
     # Create a new directory because it does not exist
         os.makedirs(output_dirs)
         print("The output directory %s is created!" % (output_dirs))
 
-    origin_model = "bvlcalexnet-9.onnx"
+    resourceid = { 1:'lenovo_cpu0', 2:'lenovo_cpu1'}
+    random_map = load_json('./mapping.json')
+
+    origin_model = select_model(IN_DIR)
     #origin_model = "resnet101-v2-7.onnx"
     #origin_model = "densenet-9.onnx"
-    input_model = format_onnx(origin_model)
+    print("Model:  %s" % origin_model)
+    print("Output: %s/" % OUT_DIR)
+    input_model = format_onnx(origin_model, OUT_DIR)
     model =  onnx.load(input_model)
     model_len = len(model.graph.node)
-    resourceid = { 1:'lenovo_cpu0', 2:'lenovo_cpu1'}
-    platforms = ['lenovo']
-    random_map = load_json('./mapping.json')
+    # Logical device names come from the mapping keys; GenerateRankFile() resolves
+    # them to real MPI hosts (see AUTODICE_HOSTS / AUTODICE_HOST).
+    platforms = list(dict.fromkeys(k.split('_')[0] for k in random_map.keys()))
 
     #M=3
     #gene = np.array([0,18]).astype(int)
@@ -1038,7 +1095,7 @@ if __name__ == '__main__':
     print ("Front End time: %f (s)"%(time.time() - start_time))
     #cppname, NodesList, ComputingNodes
     GenerateCode = EngineCode(
-        CppName = "./models/multinode",
+        CppName = OUT_DIR+"/multinode",
         Platforms = InputSpecs.platforms,
         NodesList = InputSpecs.nodes,
         ComputingNodes = InputSpecs.computingnodes,

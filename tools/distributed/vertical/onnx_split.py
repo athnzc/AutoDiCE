@@ -2,6 +2,7 @@
 import onnx
 from onnx import helper, checker
 from onnx import TensorProto
+import os
 import re
 import argparse
 import json,copy
@@ -22,7 +23,7 @@ def gen_essential(platform, nodes_number):
             h_file.write('rank '+ str(i) + '=' + platform[i]+'    slots=0-5 \n')
 
 ##############################
-def format_onnx(input_model):
+def format_onnx(input_model, out_dir='.'):
     model = onnx.load(input_model)
     model = onnx.shape_inference.infer_shapes(model)
     graph = model.graph
@@ -43,7 +44,9 @@ def format_onnx(input_model):
             graph.node[i].output[output_i] = graph.node[i].output[output_i].replace('/','_')
     
     try:
-        model_name = 'format_'+input_model.split('/')[-1]
+        # Written to out_dir, not next to the source model: the input directory may
+        # be mounted read-only and must stay free of generated files.
+        model_name = os.path.join(out_dir, 'format_'+input_model.split('/')[-1])
         onnx.save(model, model_name)
         #print("Check input model:::", model_name, " Format Errors: ", onnx.checker.check_model(model))
     except:

@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
+#include <cstdint>
 #include <unordered_map>
 #include <vector>
 

@@ -157,7 +157,8 @@ int InnerProduct_cuda::forward_int8(const CudaMat& bottom_blob, CudaMat& top_blo
         return innerproduct_cuda_forward_int8(bottom_blob_tm, top_blob, InnerProduct_info(*this),
                                               gpu_scratch_pad_memory, gpu_scratch_pad_memory_size);
     } else {
-        throw  std::runtime_error("Not implemented");
+        fprintf(stderr, "innerproduct_cuda forward_int8: not implemented for large sizes\n");
+        return -1;
     }
 }
 

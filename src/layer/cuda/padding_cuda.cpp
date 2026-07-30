@@ -221,9 +221,8 @@ int Padding_cuda::forward(const std::vector<CudaMat>&, std::vector<CudaMat>&, co
     LOGL("Padding_cuda forward 2");
 #endif
 
-    throw  std::runtime_error("Not implemented");
-
-    return 0;
+    fprintf(stderr, "Padding_cuda forward 2: not implemented\n");
+    return -1;
 }
 
 
