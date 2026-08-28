@@ -10,3 +10,4 @@ build
 ucx
 helloworld*
 tools/distributed/vertical/models
+tools/distributed/vertical/out
